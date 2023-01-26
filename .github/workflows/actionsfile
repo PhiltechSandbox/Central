@@ -1,0 +1,12 @@
+{
+	"application_properties": {
+                "APPCODE": "app_code",
+		"APP_NAME": "appname",
+		"REGISTRY_URL": "registryurl",
+		"NAMESPACE": "aks_namespace",
+		"HELM_NAME": "helmcharts",
+		"VALUES_PATH": "values_file_path",
+		"CONFIG_PATH": "config_file_path",
+		"KUBECONFIG": "${{ secrets.ESCO_AKSSHARED_NONPROD_WESTUS_CLUSTER_01 }}"
+	}
+}
