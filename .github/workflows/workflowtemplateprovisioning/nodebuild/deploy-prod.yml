@@ -1,0 +1,27 @@
+name: deploy-prod
+on:
+  workflow_dispatch:
+    inputs: 
+      Tag:
+        type: string
+        description: 'Tag'    
+        required: true
+        
+jobs:
+  prod-deploy:
+    uses: albertsons/esgh-central-workflow-aks/.github/workflows/oneclick-deploy-prod.yml@master
+    with:
+      ACTIONSFILE: "Actionsfile/prod"
+      TAG: ${{ github.event.inputs.Tag }}     
+    secrets:
+      REGISTRY_USER: ${{ secrets.ACR_USER }}
+      REGISTRY_PWD: ${{ secrets.ACR_PWD }} 
+      KUBECONFIG: ${{ secrets.ESCO_AKSPHI_PROD_WESTUS_CLUSTER_01 }} 
+  Deploy-Status-check-workflow:
+    needs: prod-deploy
+    if: success()
+    uses: albertsons/esgh-central-workflow-aks/.github/workflows/Deploy-Status-check.yml@master
+    with:
+      ACTIONSFILE: "Actionsfile/prod" 
+    secrets:      
+      KUBECONFIG: ${{ secrets.ESCO_AKSPHI_PROD_WESTUS_CLUSTER_01 }}      

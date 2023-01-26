@@ -1,0 +1,124 @@
+name: deploy-nonprod
+on:
+  workflow_dispatch:
+    inputs: 
+      dev:
+        type: boolean
+        description: 'deploy dev'    
+        required: false
+        default: 'false'          
+      qa1:
+        type: boolean
+        description: 'deploy qa1'    
+        required: false
+        default: 'false'  
+      qa2:
+        type: boolean
+        description: 'deploy qa2'    
+        required: false
+        default: 'false'          
+      perf1:
+        type: boolean
+        description: 'deploy perf1'    
+        required: false
+        default: 'false'
+      stage:
+        type: boolean
+        description: 'deploy stage'    
+        required: false
+        default: 'false'        
+      Tag:
+        type: string
+        description: 'Tag'    
+        required: true   
+jobs:
+  dev-deploy:
+    if: success() && github.event.inputs.dev == 'true'
+    uses: albertsons/esgh-central-workflow-aks/.github/workflows/oneclick-deploy-nonprod.yml@master
+    with:
+      ACTIONSFILE: "Actionsfile/dev"
+      TAG: ${{ github.event.inputs.Tag }}    
+    secrets:
+      REGISTRY_USER: ${{ secrets.ACR_USER }}
+      REGISTRY_PWD: ${{ secrets.ACR_PWD }} 
+      KUBECONFIG: ${{ secrets.ESCO_AKSPCI_NONPROD_WESTUS_CLUSTER_01 }} 
+  Deploy-Status-check-dev:
+    needs: dev-deploy
+    if: success()
+    uses: albertsons/esgh-central-workflow-aks/.github/workflows/Deploy-Status-check.yml@master
+    with:
+      ACTIONSFILE: "Actionsfile/dev" 
+    secrets:  
+      KUBECONFIG: ${{ secrets.ESCO_AKSPCI_NONPROD_WESTUS_CLUSTER_01 }}   
+  qa1-deploy:
+    if: success() && github.event.inputs.qa1 == 'true'
+    uses: albertsons/esgh-central-workflow-aks/.github/workflows/oneclick-deploy-nonprod.yml@master
+    with:
+      ACTIONSFILE: "Actionsfile/qa1"
+      TAG: ${{ github.event.inputs.Tag }} 
+    secrets:
+      REGISTRY_USER: ${{ secrets.ACR_USER }}
+      REGISTRY_PWD: ${{ secrets.ACR_PWD }} 
+      KUBECONFIG: ${{ secrets.ESCO_AKSPCI_NONPROD_WESTUS_CLUSTER_01 }} 
+  Deploy-Status-check-qa1:
+    needs: qa1-deploy
+    if: success()
+    uses: albertsons/esgh-central-workflow-aks/.github/workflows/Deploy-Status-check.yml@master
+    with:
+      ACTIONSFILE: "Actionsfile/qa1" 
+    secrets:   
+      KUBECONFIG: ${{ secrets.ESCO_AKSPCI_NONPROD_WESTUS_CLUSTER_01 }}
+  qa2-deploy:
+    if: success() && github.event.inputs.qa2 == 'true'
+    uses: albertsons/esgh-central-workflow-aks/.github/workflows/oneclick-deploy-nonprod.yml@master
+    with:
+      ACTIONSFILE: "Actionsfile/qa2"
+      TAG: ${{ github.event.inputs.Tag }} 
+    secrets:
+      REGISTRY_USER: ${{ secrets.ACR_USER }}
+      REGISTRY_PWD: ${{ secrets.ACR_PWD }} 
+      KUBECONFIG: ${{ secrets.ESCO_AKSPCI_NONPROD_WESTUS_CLUSTER_01 }} 
+  Deploy-Status-check-qa2:
+    needs: qa2-deploy
+    if: success()
+    uses: albertsons/esgh-central-workflow-aks/.github/workflows/Deploy-Status-check.yml@master
+    with:
+      ACTIONSFILE: "Actionsfile/qa2" 
+    secrets:   
+      KUBECONFIG: ${{ secrets.ESCO_AKSPCI_NONPROD_WESTUS_CLUSTER_01 }}    
+  perf1-deploy:
+    if: success() && github.event.inputs.perf1 == 'true'
+    uses: albertsons/esgh-central-workflow-aks/.github/workflows/oneclick-deploy-nonprod.yml@master
+    with:
+      ACTIONSFILE: "Actionsfile/perf1"
+      TAG: ${{ github.event.inputs.Tag }} 
+    secrets:
+      REGISTRY_USER: ${{ secrets.ACR_USER }}
+      REGISTRY_PWD: ${{ secrets.ACR_PWD }} 
+      KUBECONFIG: ${{ secrets.ESCO_AKSPCI_NONPROD_WESTUS_CLUSTER_01 }} 
+  Deploy-Status-check-perf1:
+    needs: perf1-deploy
+    if: success()
+    uses: albertsons/esgh-central-workflow-aks/.github/workflows/Deploy-Status-check.yml@master
+    with:
+      ACTIONSFILE: "Actionsfile/perf1" 
+    secrets:   
+      KUBECONFIG: ${{ secrets.ESCO_AKSPCI_NONPROD_WESTUS_CLUSTER_01 }}   
+  stage-deploy:
+    if: success() && github.event.inputs.stage == 'true'
+    uses: albertsons/esgh-central-workflow-aks/.github/workflows/oneclick-deploy-nonprod.yml@master
+    with:
+      ACTIONSFILE: "Actionsfile/stage"
+      TAG: ${{ github.event.inputs.Tag }} 
+    secrets:
+      REGISTRY_USER: ${{ secrets.ACR_USER }}
+      REGISTRY_PWD: ${{ secrets.ACR_PWD }} 
+      KUBECONFIG: ${{ secrets.ESCO_AKSPCI_NONPROD_WESTUS_CLUSTER_01 }} 
+  Deploy-Status-check-stage:
+    needs: stage-deploy
+    if: success()
+    uses: albertsons/esgh-central-workflow-aks/.github/workflows/Deploy-Status-check.yml@master
+    with:
+      ACTIONSFILE: "Actionsfile/stage" 
+    secrets:   
+      KUBECONFIG: ${{ secrets.ESCO_AKSPCI_NONPROD_WESTUS_CLUSTER_01 }} 

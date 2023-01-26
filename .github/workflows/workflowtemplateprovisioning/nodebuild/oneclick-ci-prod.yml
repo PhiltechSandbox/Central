@@ -1,0 +1,39 @@
+name: oneclick-cicd-prod
+on:
+  workflow_dispatch:
+    inputs: 
+      prod:
+        type: boolean
+        description: 'deploy prod'    
+        required: false
+        default: 'false'          
+  
+jobs:
+  call-ci-workflow:
+    uses: albertsons/esgh-central-workflow-aks/.github/workflows/oneclick-ci-prod.yml@master
+    with:
+      ACTIONSFILE: "Actionsfile/prod"
+      TAG: rel-${{ github.run_id }}-${{ github.run_number }}
+      build_type: maven
+      javaVersion: 8
+      VERACODE_APPNAME: RXIE-Catalog-dev
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+      TL_USERNAME: ${{ secrets.TL_USERNAME }}
+      TL_PASSWORD: ${{ secrets.TL_PASSWORD }}
+      REGISTRY_USER: ${{ secrets.ACR_USER }}
+      REGISTRY_PWD: ${{ secrets.ACR_PWD }}   
+      VERACODEID: ${{ secrets.VERACODEID }}
+      VERACODEKEY: ${{ secrets.VERACODEKEY }} 
+  prod-deploy:
+    needs: call-ci-workflow
+    if: success() && github.event.inputs.prod == 'true'
+    uses: albertsons/esgh-central-workflow-aks/.github/workflows/oneclick-deploy-prod.yml@master
+    with:
+      ACTIONSFILE: "Actionsfile/prod"
+      TAG: rel-${{ github.run_id }}-${{ github.run_number }}    
+    secrets:
+      REGISTRY_USER: ${{ secrets.ACR_USER }}
+      REGISTRY_PWD: ${{ secrets.ACR_PWD }} 
+      KUBECONFIG: ${{ secrets.ESCO_AKSPHI_PROD_WESTUS_CLUSTER_01 }}
