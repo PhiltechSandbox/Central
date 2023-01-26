@@ -1,0 +1,19 @@
+{
+  "CHG0384391": {
+    "appcode": "ospg-payments",
+    "work_start": "2022-05-17 15:52:00",
+    "work_end": "2022-05-28 19:55:55",
+    "repo_name": "ospg-app",
+    "workflow_name": "PROD-AKS",
+    "phase_state": "Pending"
+  },
+  "CHG0390601": {
+    "appcode": "ospg-payments",
+    "work_start": "2022-05-18 14:59:00",
+    "work_end": "2022-05-24 19:55:55",
+    "repo_name": "ospg-app",
+    "workflow_name": "PROD-AKS",
+    "Tag": "rel-13.0.0",
+    "phase_state": "Draft"
+  }
+}
