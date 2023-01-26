@@ -1,0 +1,96 @@
+# The Docker build, scan, and push part of the CI workflow. 
+# However, this contains the capability to run multiple jobs to create docker images and push them depending on the ACTIONSFILE configured.
+# Mostly being used to cater CI for dxinaz applications. 
+
+name: oneclick-ci-multi-container
+
+on:
+ workflow_call:
+   inputs:
+      ACTIONSFILE:    
+        required: true
+        type: string 
+      TAG:    
+        required: true
+        type: string 
+      branch_name: 
+         required: true
+         type: string 
+        
+   secrets:  
+     ACR_USER:
+       required: true
+     ACR_PWD:
+       required: true
+
+env: 
+  ACTIONSFILE: ${{ inputs.ACTIONSFILE }}
+  TAG: ${{ inputs.TAG }}
+  
+jobs:
+ Get_App_Names:
+   runs-on: [ AKS ]
+   outputs:
+     app-list: ${{ steps.applist.outputs.json }}
+   steps:
+     - uses: actions/checkout@v2
+     - name: Get Application list
+       id: applist
+       shell: bash
+       run: |   
+         JSON=$(cat $ACTIONSFILE | jq -c .application_list.list)
+         echo $JSON
+         echo "::set-output name=json::$JSON"
+         
+ Docker_build_And_Docker_Push:
+     runs-on: [ AKS ]
+     needs: Get_App_Names
+     strategy:
+       matrix: ${{ fromJSON(needs.Get_App_Names.outputs.app-list) }}
+     steps:
+       - uses: actions/checkout@v2
+       - name: Download Artifact Jarfile.
+         uses: actions/download-artifact@v2
+         with:
+          name: AppArtifacts
+       - name: Read application properties file (APPCODE)
+         id: appcode
+         uses: albertsons/esgh-actions-jsonread@release
+         with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.APPCODE 
+       - name: Read application properties file (REGISTRY_URL)
+         id: registry_url
+         uses: albertsons/esgh-actions-jsonread@release
+         with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.REGISTRY_URL 
+       - name: Print App Name
+         run: |
+           echo "${{ matrix.app_name }}" 
+       - name: Docker Login     
+         uses: albertsons/esgh-docker-login@v1
+         with:
+           registry: ${{ steps.registry_url.outputs.prop }}
+           username: ${{ secrets.ACR_USER }}
+           password: ${{ secrets.ACR_PWD }} 
+       - name: Docker Build
+         run: |
+           docker build --tag ${{ steps.registry_url.outputs.prop }}/${{ steps.appcode.outputs.prop }}/${{ matrix.app_name }}:${{ env.TAG }} .
+       - name: Twistlock Analysis
+         id: scan
+         uses: albertsons/esgh-prisma-twistlock@v1
+         with:
+           pcc_console_url: https://us-east1.cloud.twistlock.com/us-2-158288594
+           pcc_user: ${{ secrets.TL_USERNAME }}
+           pcc_pass: ${{ secrets.TL_PASSWORD }}
+           image_name: ${{ steps.registry_url.outputs.prop }}/${{ steps.appcode.outputs.prop }}/${{ steps.app_name.outputs.prop }}:${{ env.TAG }} 
+       - name: Docker Push
+         run: |
+           docker push ${{ steps.registry_url.outputs.prop }}/${{ steps.appcode.outputs.prop }}/${{ matrix.app_name }}:${{ env.TAG }}
+       - name: Clean Workspace
+         uses: albertsons/esgh-workspace-clean@v2-bash
+       - name: Printing workspace cleaned message
+         run: |
+           echo "Workspace cleared for run ID ${{ github.run_number }}" 
+           

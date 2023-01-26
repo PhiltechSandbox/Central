@@ -1,0 +1,71 @@
+name: Twistlock-analysis
+
+on:
+ workflow_call:
+   inputs:
+      pull_registry_url:    
+        required: true
+        type: string
+      push_registry_url:    
+        required: true
+        type: string
+      tag:    
+        required: true
+        type: string  
+      image: 
+         required: true
+         type: string   
+      app_Code: 
+         required: true
+         type: string 
+   secrets:  
+     TL_USERNAME:
+       required: true
+     TL_PASSWORD:
+       required: true
+     REGISTRY_USER:
+       required: true
+     REGISTRY_PWD:
+       required: true 
+     pull_REGISTRY_USER:
+       required: true
+     pull_REGISTRY_PWD:
+       required: true
+       
+
+jobs:
+  pull_image_and_Tag:
+    runs-on: [ AKS ]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Docker Build     
+        uses: albertsons/esgh-docker-login@v1
+        with:
+          registry: ${{ inputs.pull_registry_url }}
+          username: ${{ secrets.pull_REGISTRY_USER }}
+          password: ${{ secrets.pull_REGISTRY_PWD }}          
+      - run: |
+          docker pull ${{ inputs.pull_registry_url }}/${{ github.event.inputs.image }}:${{ github.event.inputs.tag }}
+          echo "pull complete"
+          docker image tag ${{ inputs.pull_registry_url }}/${{ github.event.inputs.image }}:${{ github.event.inputs.tag }} ${{ inputs.push_registry_url }}/${{ github.event.inputs.app_Code }}/${{ github.event.inputs.image }}:${{ github.event.inputs.tag }}
+          echo "image tag complete"
+      - name: Twistlock analysis     
+        uses: albertsons/esgh-actions-twistlock@v1
+        with:
+          tl-username: ${{ secrets.TL_USERNAME }}
+          tl-password: ${{ secrets.TL_PASSWORD }}
+          tl-console-url: https://us-east1.cloud.twistlock.com/us-2-158288594
+          docker-image: ${{ inputs.push_registry_url }}/${{ github.event.inputs.app_Code }}/${{ github.event.inputs.image }}:${{ github.event.inputs.tag }}          
+      - name: Docker login and Push Image to registry     
+        uses: albertsons/esgh-docker-login@v1
+        with:
+          registry: ${{ inputs.push_registry_url }}
+          username: ${{ secrets.REGISTRY_USER }}
+          password: ${{ secrets.REGISTRY_PWD }} 
+      - run: |
+          docker push ${{ inputs.push_registry_url }}/${{ github.event.inputs.app_Code }}/${{ github.event.inputs.image }}:${{ github.event.inputs.tag }}
+      - name: clean workspace
+        uses: albertsons/esgh-workspace-clean@v2-bash
+      - name: Printing workspace cleaned message
+        run: |
+          echo "Workspace cleared for run ID ${{ github.run_number }}"     

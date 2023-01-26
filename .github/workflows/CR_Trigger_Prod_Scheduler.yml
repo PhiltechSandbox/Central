@@ -1,0 +1,14 @@
+name: cr_trigger_prod
+on:
+  schedule:
+  - cron: "0/10 * * * *"
+  workflow_dispatch:
+jobs:
+  Execute_workflow:
+    name: Execute the workflow 
+    runs-on: [ pilot ]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Update CR STATE and Trigger the workflow
+        run: |
+           python Scripts/workflow_trigger.py ${{ secrets.SERVICENOW_TOKEN }} ${{ secrets.PERSONAL_ACCESS_TOKEN }}

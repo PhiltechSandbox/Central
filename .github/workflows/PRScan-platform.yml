@@ -1,0 +1,128 @@
+name: PR Scan for Platform
+on:
+ workflow_call:
+  inputs:
+    javaVersion:
+      required: true
+      type: number
+    VERACODE_APPNAME:
+      required: true  
+      type: string
+    build_type:
+      required: true
+      type: string
+    FILEPATH:
+      required: true
+      type: string
+  secrets:
+     SONAR_TOKEN:
+       required: true
+     SONAR_HOST_URL:
+       required: true
+     SONAR_CONTINUEONERROR_NONPROD:
+       required: false
+     VERACODEID:
+       required: true 
+     VERACODEKEY:
+       required: true
+     VERACODE_CONTINUEONERROR_NONPROD:
+       required: false
+     PERSONAL_ACCESS_TOKEN:
+       required: true
+
+jobs:
+  Maven_Build:
+    runs-on: [ AKS ]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up JDK '${{ inputs.javaVersion }}'
+        uses: actions/setup-java@v2
+        with:
+          java-version: '${{ inputs.javaVersion }}'
+          distribution: 'adopt'
+      - name: Build with Maven 
+        if:  ${{ inputs.build_type == 'maven' }} 
+        run: |
+          cp /home/es00gh/.m2/settings.xml .
+          ls -l 
+          mvn clean install --settings settings.xml
+      - name: Build with Maven Wrapper
+        if: ${{ inputs.build_type == 'mavenwrapper' }} 
+        run: |
+          cp /home/es00gh/.m2/settings.xml .
+          chmod +x mvnw
+          ls -l 
+          ./mvnw clean install --settings settings.xml
+      - name: Upload Artifacts      
+        uses: actions/upload-artifact@v2
+        with:
+          name: AppArtifacts
+          path: |
+            **/target/*.jar
+            **/target/*.war
+            **/target/*.ear
+            **/target/*.tar
+            **/target/*.tar.gz
+            settings.xml
+            
+  Sonar_Scan:
+     name: PR Scanning
+     runs-on: [ AKS ]
+     continue-on-error: ${{ secrets.SONAR_CONTINUEONERROR_NONPROD == 'true' }}
+     steps:
+      - uses: actions/checkout@v2
+      - name: Set up JDK '${{ inputs.javaVersion }}'
+        uses: actions/setup-java@v2
+        with:
+          java-version: '${{ inputs.javaVersion }}'
+          overwrite-settings: false
+          distribution: 'adopt'
+      - name: Build
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}  
+        run: |
+          cp /home/es00gh/settings.xml .
+          mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent install org.jacoco:jacoco-maven-plugin:report  --settings settings.xml
+      - name: Setup JDK 11
+        uses: actions/setup-java@v2
+        with:
+          java-version: 11
+          overwrite-settings: false
+          distribution: 'adopt'  
+      - name: Sonar analyze
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}  
+        run: |
+          mvn sonar:sonar -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} -Dsonar.login=${{ secrets.SONAR_TOKEN }}  --settings settings.xml
+ 
+  Veracode_Scan:
+    name: PR Veracode Scanning
+    runs-on: [ AKS ]
+    needs: Sonar_Scan
+    steps:
+      - uses: actions/checkout@v2    
+      - name: Download Artifact.
+        uses: actions/download-artifact@v2
+        with:
+          name: AppArtifacts           
+      - name: veracode scan
+        continue-on-error: ${{ secrets.VERACODE_CONTINUEONERROR_NONPROD == 'true' }}
+        uses: albertsons/esgh-actions-veracode@master
+        with:
+          filepath: '${{ inputs.FILEPATH }}'
+          vid: '${{ secrets.VERACODEID }}'
+          vkey: '${{ secrets.VERACODEKEY }}'
+          appname: '${{ inputs.VERACODE_APPNAME }}'
+          createsandbox: ''
+          sandboxname: ''
+          scantimeout: 15
+          exclude: '**/maven-wrapper.jar'
+          include: '**/**.jar, **/**.war, **/**.ear, **/**.tar.gz, **/**.tar'
+          criticality: 'VeryHigh'
+          AbortOnFail: 'true'  
+          deleteIncompleteScan: 2
+          scanallnonfataltoplevelmodules: 'true'
+          createprofile: 'false'
+          debug: 'true'            

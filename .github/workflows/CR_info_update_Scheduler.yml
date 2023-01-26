@@ -1,0 +1,22 @@
+name: Update CR Json file
+on:
+  workflow_dispatch:
+  schedule:
+  - cron: "8/10 * * * *"  
+jobs:
+  Push_CR_Data:
+    name: Push CR STATUS
+    runs-on: [ pilot ]
+    steps:
+      - uses: actions/checkout@v2
+      - run: |
+           python Scripts/update_CR_state.py ${{ secrets.SERVICENOW_TOKEN }} ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+      - name: Update CR data JSON
+        id: commit
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "github-actions"
+          git status
+          git add change_info.json 
+          git diff-index --quiet HEAD || git commit -m "Update CR data JSON" -a
+          git push origin master

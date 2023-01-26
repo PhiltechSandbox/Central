@@ -1,0 +1,43 @@
+name: oneclick-ci-veracode-nonprod
+
+on:
+ workflow_call:
+   inputs:
+      ACTIONSFILE:    
+        required: true
+        type: string
+      TAG:    
+        required: true
+        type: string 
+      VERACODE_APPNAME:
+        required: true   
+        type: string
+      branch_name: 
+         required: true
+         type: string
+   secrets: 
+     VERACODEID:
+       required: true  
+     VERACODEKEY:
+       required: true 
+     VERACODE_CONTINUEONERROR_NONPROD:
+       required: false
+jobs:
+  Veracode_scan:
+    runs-on: [ aks ]
+    steps:
+      - uses: actions/checkout@v2    
+      - name: Download Artifact.
+        uses: actions/download-artifact@v2
+        with:
+          name: AppArtifacts           
+      - name: veracode scan
+        continue-on-error: ${{ secrets.VERACODE_CONTINUEONERROR_NONPROD == 'true' }}
+        run: |
+          date=$(echo ${{ steps.date.outputs.date }} | cut -c 3-)
+          echo "${date}"
+          ls -la
+          wget https://downloads.veracode.com/securityscan/pipeline-scan-LATEST.zip
+          unzip -o -d /tmp pipeline-scan-LATEST.zip
+          java -jar /tmp/pipeline-scan.jar --veracode_api_id "${{ secrets.VERACODEID }}" --veracode_api_key "${{ secrets.VERACODEKEY }}" --request_policy "Current ABS-Non-PCI Standard 3.0"
+          find . -name \*.jar -exec java -jar /tmp/pipeline-scan.jar --veracode_api_id "${{ secrets.VERACODEID }}" --veracode_api_key "${{ secrets.VERACODEKEY }}" --fail_on_severity="Very High, High" --file {} \;

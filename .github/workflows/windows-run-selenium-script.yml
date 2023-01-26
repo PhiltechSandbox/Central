@@ -1,0 +1,47 @@
+name: windows-run-selenium-script
+
+on:
+ workflow_call:
+   inputs:
+      mvn_options:    
+        required: true
+        type: string
+        default: '-Dsurefire.suiteXmlFiles=src\test\resources\testExecutionDriver\testEnvExecutionSuites\TestSuite_QA_SanityTest.xml'
+      result_reports:    
+        required: false
+        type: string
+        default: '**/Results/ExtentReports/*.html'
+ 
+env:
+   mvn_options: ${{ inputs.mvn_options }}
+   
+jobs:
+  selenium_automation:
+    runs-on: [ windows-1 ]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up JDK 11
+        uses: actions/setup-java@v2
+        with:
+          java-version: 11
+          overwrite-settings: false
+          distribution: 'adopt'
+      - name: Run Selenium Automation
+        run: |
+          echo "C:\Program Files\Apache\bin" >> $GITHUB_PATH 
+          ls
+          SET CLASSPATH=%CLASSPATH%;"C:\jenkins_prod\maven35-agent.jar";"C:\jenkins_prod\tools\hudson.tasks.Maven_MavenInstallation\Maven-3.6\boot\plexus-classworlds-2.6.0.jar";"C:\jenkins_prod\tools\hudson.tasks.Maven_MavenInstallation\Maven-3.6/conf/logging";"jenkins.maven3.agent.Maven35Main";"C:\jenkins_prod\tools\hudson.tasks.Maven_MavenInstallation\Maven-3.6";"C:\jenkins_prod\slave.jar";"C:\jenkins_prod\maven35-interceptor.jar";"C:\jenkins_prod\maven3-interceptor-commons.jar" 
+          echo "$CLASSPATH"
+          echo "$PATH"
+          javaw -jar C:\selenium-hub-node-configs\DRIVERS\selenium-server-standalone-3.11.0.jar -role hub -hubConfig C:\selenium-hub-node-configs\HUB\hubConfig.json
+          javaw -Dwebdriver.chrome.driver="C:\selenium-hub-node-configs\DRIVERS\chromedriver.exe" -jar C:\selenium-hub-node-configs\DRIVERS\selenium-server-standalone-3.11.0.jar -role node -nodeConfig GridNode.json
+          echo "${{ env.mvn_options }}"
+          ls
+          cmd.exe /C "C:\jenkins_prod\tools\hudson.tasks.Maven_MavenInstallation\Maven-3.6\bin\mvn.cmd -f pom.xml clean install ${{ env.mvn_options }}"
+      - name: Upload Result Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: AppArtifacts
+          path: |
+            ${{ inputs.result_reports }}
+         

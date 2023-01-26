@@ -1,0 +1,18 @@
+name: Extract Branch name
+
+on:
+  workflow_call:
+    outputs:
+       branch_name:
+          description: "Branch Name"
+          value: ${{ jobs.Extract_Branch.outputs.branchname }}
+jobs:
+  Extract_Branch:
+    runs-on: [ AKS ]
+    outputs:
+        branchname: ${{ steps.extract_branch.outputs.branch }}
+    steps:
+      - name: Extract branch name
+        shell: bash
+        run: echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
+        id: extract_branch

@@ -1,0 +1,58 @@
+name: python-batch-script-ci
+
+on:
+ workflow_call:
+   inputs:
+      app_name:
+        required: true
+        type: string
+      zip_name: 
+        required: true
+        type: string
+      branch_name:
+        required: true
+        type: string
+        
+   secrets:  
+     ARTI_PASS:
+       required: true
+       
+env:
+  APP_NAME: ${{ inputs.app_name }}
+  ZIP_NAME: ${{ inputs.zip_name }}
+  BRANCH_NAME: ${{ inputs.branch_name }}
+
+jobs:
+  compress_scripts:
+    outputs:
+      zip_name: ${{ steps.zip_name.outputs.zip_file }}
+    runs-on: [ AKS ]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Zip Python Scripts
+        shell: bash
+        run: |
+          zip -r $ZIP_NAME-${{ github.run_number }}-$BRANCH_NAME.zip batchscript dbrscript cmod db
+          ls -og $ZIP_NAME-${{ github.run_number }}-$BRANCH_NAME.zip
+      - name: Uploading the artifacts
+        uses: actions/upload-artifact@v2
+        with: 
+          name: AppArtifacts
+          path: |
+            **/${{ env.ZIP_NAME }}-${{ github.run_number }}-${{ env.BRANCH_NAME }}.zip
+      - name: Set Zip Name
+        run: echo "##[set-output name=zip_file;]$(echo $ZIP_NAME-${{ github.run_number }}-$BRANCH_NAME.zip)"
+        id: zip_name
+        
+  push_to_artifactory:
+    runs-on: [ AKS ]
+    needs: [ compress_scripts ]
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v2
+        with: 
+          name: AppArtifacts
+      - run: |
+          curl -u${{ secrets.ARTI_PASS }} -v -T ./${{ needs.compress_scripts.outputs.zip_name }} https://artifactory.albertsons.com/artifactory/AlbertsonsSnapshot/com/albertsons/util/$APP_NAME/${{ needs.compress_scripts.outputs.zip_name }}        
+ 
+    

@@ -1,0 +1,36 @@
+name: Send mail
+on:
+  workflow_call:
+    secrets:
+      PERSONAL_ACCESS_TOKEN:
+       required: true 
+
+jobs:         
+ on-failure:
+   name: Mail failure Alert
+   runs-on: [ pilot ]
+   #if: ${{ github.event.workflow_call.conclusion == 'failure' }}
+   steps:
+     - name: action-send-mail
+       uses: actions/checkout@v2
+       with:
+          repository: albertsons/egh-action-mail
+          ref: v2
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          path: ./.github/albertsons/action-send-mail
+     - uses: ./.github/albertsons/action-send-mail
+       with:
+     # mail server settings
+         server_address: mailrouter.safeway.com
+         server_port: 25
+    # user credentials
+       #  username: ${{ secrets.EMAIL_USERNAME }}
+       #  password: ${{ secrets.EMAIL_PASSWORD }}
+    # email subject
+         subject: ${{ github.job }} job of ${{ github.repository }} has failure
+    # email body as text
+         body: ${{ github.job }} job in worflow ${{ github.workflow }} of ${{ github.repository }} has failure
+    # comma-separated string, send email to
+         to: Platform.DevOps@albertsons.com
+    # from email name
+         from: GitHub Action flow  

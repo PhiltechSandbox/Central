@@ -1,0 +1,63 @@
+#Delete 15 days older cr from central change-info Json file
+name: Retention-CR-data
+on: 
+ workflow_dispatch: 
+ schedule:
+  - cron: "53 1 */1 * *" 
+jobs:
+  create:
+    name: delete cr from json
+    runs-on: [ pilot ]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Trigger Create Script
+        uses: actions/checkout@v2
+        with:
+          repository: albertsons/esgh-run-python-script
+          ref: v1
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          path: ./.github/albertsons/esgh-run-python-script  
+      - uses: ./.github/albertsons/esgh-run-python-script
+        with:
+          script: |
+            import json
+            from datetime import date, datetime
+            with open('change_info.json','r')as f:
+              data = json.load(f)
+              #print(data)
+
+            print(len(data))
+            current_date = datetime.now().date()
+            print(current_date)
+            print('___________________')
+            l = []
+            for i in data:
+              end_date = data[i]['work_end'].split()[0]
+              end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
+              print(end_date)
+              diffrence = current_date - end_date
+              if str(diffrence).split()[0] == '0:00:00':
+               continue
+              if int(str(diffrence).split()[0]) > 15:
+                # print(data[i])
+                l.append(i)
+
+            print(l)
+            print("-------------------")
+            for i in l:
+              del data[i]
+            print(len(data))
+            with open('change_info.json','w')as f:
+              json.dump(data,f, indent =2)
+              print(data) 
+      - name: Update new CR data JSON
+        id: commit
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "github-actions"
+          git status
+          git add change_info.json 
+          git diff-index --quiet HEAD || git commit -m "Running Retention policy for CR data JSON" -a
+          git push origin master         
+
+

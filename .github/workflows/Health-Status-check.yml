@@ -1,0 +1,43 @@
+name: Health-Status-check
+
+on:
+ workflow_call:
+   inputs:
+     HEALTH_URL:    
+       required: true
+       type: string 
+   secrets:
+     PERSONAL_ACCESS_TOKEN:
+       required: true 
+       
+jobs:       
+  App-health-check:
+    runs-on: [ AKS ]
+    steps:
+      - name: Trigger Create Script
+        uses: actions/checkout@v2
+        with:
+          repository: albertsons/esgh-run-python-script
+          ref: v1
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          path: ./.github/albertsons/esgh-run-python-script  
+      - uses: ./.github/albertsons/esgh-run-python-script
+        with:
+          script: |
+            import json
+            import sys
+            import requests   
+            r = requests.get('${{ inputs.HEALTH_URL }}')
+            r.json()
+            GET_RESPONSE = str(r)
+            print(GET_RESPONSE)
+            if "200" in GET_RESPONSE:
+             print('App Health Status OK')
+            else:
+             print('App Health not OK')
+             sys.exit(1)
+      - name: clean workspace
+        uses: albertsons/esgh-workspace-clean@v2-bash
+      - name: Printing workspace cleaned message
+        run: |
+          echo "Workspace cleared for run ID ${{ github.run_number }}"     

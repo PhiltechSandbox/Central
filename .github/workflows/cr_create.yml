@@ -1,0 +1,81 @@
+name: Create CR
+on: 
+ workflow_call:
+    inputs:
+      TAG:    
+        required: true
+        type: string  
+      RUN_ID:    
+        required: true
+        type: string        
+    secrets:
+      SERVICENOW_TOKEN:
+       required: true
+      PERSONAL_ACCESS_TOKEN:
+       required: true 
+jobs:
+  create:
+    name: change create
+    runs-on: [ pilot ]
+    steps:
+      - uses: actions/checkout@v2
+      - run: |
+          git clone https://${{ secrets.PERSONAL_ACCESS_TOKEN }}@github.albertsons.com/albertsons/esgh-central-workflow-aks.git
+      - name: Trigger Create Script
+        uses: actions/checkout@v2
+        with:
+          repository: albertsons/esgh-run-python-script
+          ref: v1
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          path: ./.github/albertsons/esgh-run-python-script  
+      - uses: ./.github/albertsons/esgh-run-python-script
+        with:
+          script: |
+            import json
+            import sys
+            import requests
+            auth_token = 'TmV0Y29vbC5JbnRlZ3JhdGlvbjpTZXJ2aWNlTm93MjAyMSE='
+            hed = {'Authorization': 'Basic ' + auth_token}
+            with open("Actionsfile/prod") as payload:
+                 data = json.load(payload)
+                 repo_id = data["application_properties"]["REPO_NAME"]
+                 work_id = data["application_properties"]["WORKFLOW_TRIGGER"]
+                 app_id = data["application_properties"]["APP_NAME"]   
+                 data["createchange"]["u_description_details"] = app_id + " deployment of release ${{ inputs.TAG }}\nThe Pre-validations console reports can be found at https://github.albertsons.com/albertsons/" + repo_id + "/actions/runs/${{ inputs.RUN_ID }}"
+                 create = data["createchange"]
+            #print(work_id)
+            url = 'https://safewayqa1.service-now.com/api/now/table/u_change_request_staging'
+            response = requests.post(url, json=create, headers=hed)
+            #print(response)
+            print("***************************")
+            print(response.json()) 
+            print("************************")
+            #repo_id = response.json()
+            output_id = response.json()
+            change_id = output_id['result']['u_change_request_number']
+            start_time_id = output_id['result']['u_planned_start_date']
+            end_time_id = output_id['result']['u_planned_end_date']
+            print("Change ID: " + change_id)
+            print("Start Time: " + start_time_id)
+            print("End Time: " + end_time_id)
+            print("**********************insert-into-Json****************")
+            
+            change_data = {change_id: {"appcode": app_id, "work_start": start_time_id, "work_end": end_time_id, "repo_name": repo_id, "workflow_name": work_id, "Tag": "${{ inputs.TAG }}", "phase_state": "Draft"}}
+            with open("esgh-central-workflow-aks/change_info.json") as f:
+                 data = json.load(f)
+            data.update(change_data)
+            with open("esgh-central-workflow-aks/change_info.json", "w") as f:
+                json.dump(data, f,indent=2) 
+            print("file created")  
+      - name: Update CR data JSON
+        id: commit
+        run: |
+          cd esgh-central-workflow-aks
+          git config --local user.email "action@github.com"
+          git config --local user.name "github-actions"
+          git pull
+          git status
+          git add change_info.json 
+          git diff-index --quiet HEAD || git commit -m "Update CR data JSON" -a
+          git push origin master         
+ 

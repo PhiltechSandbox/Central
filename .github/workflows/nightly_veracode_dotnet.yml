@@ -1,0 +1,76 @@
+name: nightly_veracode_dotnet
+
+on:
+ workflow_call:
+   inputs:
+      build_type:
+        required: false
+        type: string
+      VERACODE_APPNAME:
+       required: true  
+       type: string
+      DOTNET_APPNAME:
+       required: true  
+       type: string
+      
+   secrets:  
+     VERACODEID:
+       required: true  
+     VERACODEKEY:
+       required: true      
+
+env: 
+  DOTNET_CLI_HOME: /opt/microsoft/dotnet
+  DOTNET_ROOT: /opt/microsoft/dotnet
+jobs:        
+  Dotnet_Build:
+    runs-on: [ AKS ]
+    steps:
+      - uses: actions/checkout@v2  
+      - name: Build   
+        run: |
+          export PATH=$PATH:/opt/microsoft/dotnet:/opt/microsoft/dotnet/.dotnet/tools
+          export PATH=$PATH:/opt/microsoft/dotnet
+          dotnet restore ${{ github.workspace }}/${{ inputs.DOTNET_APPNAME }}/${{ inputs.DOTNET_APPNAME }}.sln
+          #dotnet sonarscanner begin /k:"${{ github.event.repository.name }}" /d:sonar.host.url=${{ secrets.SONAR_HOST_URL }} /d:sonar.login=${{ secrets.SONAR_TOKEN }}
+          dotnet build "${{ github.workspace }}/${{ inputs.DOTNET_APPNAME }}/${{ inputs.DOTNET_APPNAME }}.sln" -c Release -o ${{ inputs.DOTNET_APPNAME }}/build
+          #export JAVA_HOME=/usr/lib/jvm/jdk11/jdk-11.0.9.1+1
+          #dotnet sonarscanner end /d:sonar.login=${{ secrets.SONAR_TOKEN }}
+          dotnet publish "${{ github.workspace }}/${{ inputs.DOTNET_APPNAME }}/${{ inputs.DOTNET_APPNAME }}.sln" -c Release -o ${{ inputs.DOTNET_APPNAME }}/publish
+          dotnet publish "${{ github.workspace }}/${{ inputs.DOTNET_APPNAME }}/${{ inputs.DOTNET_APPNAME }}.sln" -c Debug -o ${{ inputs.DOTNET_APPNAME }}/publish_new
+          tar -czvf ${{ github.event.repository.name }}.tar.gz ${{ github.workspace }}/${{ inputs.DOTNET_APPNAME }}/publish_new
+      - uses: actions/upload-artifact@v2
+        with:
+          name: AppArtifacts
+          path: |
+            **/*.tar.gz     
+  
+  Veracode_scan:
+    runs-on: [ AKS  ]
+    needs: Dotnet_Build
+    steps:
+      - uses: actions/checkout@v2    
+      - name: Download Artifact.
+        uses: actions/download-artifact@v2
+        with:
+          name: AppArtifacts           
+      - name: veracode scan
+        continue-on-error: true
+        uses: albertsons/esgh-actions-veracode@master
+        with:
+          filepath: './*.tar.gz'
+          vid: '${{ secrets.VERACODEID }}'
+          vkey: '${{ secrets.VERACODEKEY }}'
+          appname: '${{ inputs.VERACODE_APPNAME }}'
+          createsandbox: ''
+          sandboxname: ''
+          scantimeout: 15
+          exclude: '**/maven-wrapper.jar'
+          include: '*.tar.gz'
+          criticality: 'VeryHigh'
+          AbortOnFail: 'true'  
+          deleteIncompleteScan: 2
+          scanallnonfataltoplevelmodules: 'true'
+          createprofile: 'false'
+          debug: 'true'   
+      

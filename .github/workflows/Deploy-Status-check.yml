@@ -1,0 +1,68 @@
+name: Deploy-Status-check
+
+on:
+ workflow_call:
+   inputs:
+     ACTIONSFILE:    
+       required: true
+       type: string         
+   secrets:   
+     KUBECONFIG:
+       required: true 
+env: 
+  ACTIONSFILE: ${{ inputs.ACTIONSFILE }}
+  
+jobs:       
+  Deploy-Status-check:
+    runs-on: [ AKS ]
+    steps:
+      - uses: actions/checkout@v2    
+      - name: Read application properties file
+        id: appcode
+        uses: albertsons/esgh-actions-jsonread@release
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.APPCODE          
+      - name: Read application properties file
+        id: appname
+        uses: albertsons/esgh-actions-jsonread@release
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.APP_NAME        
+      - name: Read application properties file
+        id: namespace
+        uses: albertsons/esgh-actions-jsonread@release
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.NAMESPACE 
+      - name: Read application properties file
+        id: values_path
+        uses: albertsons/esgh-actions-jsonread@release
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.VALUES_PATH
+      - name: Read application properties file
+        id: config_path
+        uses: albertsons/esgh-actions-jsonread@release
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.CONFIG_PATH           
+      - name: Read application properties file
+        id: helm_name
+        uses: albertsons/esgh-actions-jsonread@release
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.HELM_NAME         
+      - name: Set K8s-context   
+        uses: albertsons/esgh-actions-k8scontext@v1
+        with:
+          kubeconfig: ${{ secrets.KUBECONFIG }}
+      - uses: actions/checkout@v2          
+      - name: Trigger Deploy-Status-check script
+        run: |
+          sh ./Scripts/deploy_status_check.sh ${{ steps.namespace.outputs.prop }} ${{ steps.appname.outputs.prop }}-deployment
+      - name: clean workspace
+        uses: albertsons/esgh-workspace-clean@v2-bash
+      - name: Printing workspace cleaned message
+        run: |
+          echo "Workspace cleared for run ID ${{ github.run_number }}"       

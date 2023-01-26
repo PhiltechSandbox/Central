@@ -1,0 +1,83 @@
+name: nightly_veracode_script
+on:  
+  workflow_dispatch:
+jobs:
+  Supply_Chain:
+    name: Supply_Chain_nightly_veracode_script
+    runs-on: [ veracode ]
+    if: github.event.schedule == '0 12 * * SUN'
+    steps:
+      - uses: actions/checkout@v2
+      - name: nightly_veracode_script_Trigger the workflow
+        run: |
+             for repo in $(cat supply_chain.txt)
+             do
+             curl -X POST -H "Accept: application/vnd.github.v3+json" -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" https://github.albertsons.com/api/v3/repos/albertsons/$repo/actions/workflows/nightly_veracode_scan.yml/dispatches -d  '{"ref":"master"}'
+             echo "triggered $repo"
+             done 
+  Retail_Operations:
+    name: Retail_Operations_nightly_veracode_script
+    runs-on: [ veracode ]
+    if: github.event.schedule == '0 12 * * MON'
+    steps:
+      - uses: actions/checkout@v2
+      - name: nightly_veracode_script_Trigger the workflow
+        run: |
+             for repo in $(cat retail_operations.txt)
+             do
+             curl -X POST -H "Accept: application/vnd.github.v3+json" -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" https://github.albertsons.com/api/v3/repos/albertsons/$repo/actions/workflows/nightly_veracode_scan.yml/dispatches -d  '{"ref":"master"}'
+             echo "triggered $repo"
+             done
+  Merchandising:
+    name: Merchandising_nightly_veracode_script
+    runs-on: [ veracode ]
+    if: github.event.schedule == '0 12 * * TUE'
+    steps:
+      - uses: actions/checkout@v2
+      - name: nightly_veracode_script_Trigger the workflow
+        run: |
+             for repo in $(cat merchandising.txt)
+             do
+             curl -X POST -H "Accept: application/vnd.github.v3+json" -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" https://github.albertsons.com/api/v3/repos/albertsons/$repo/actions/workflows/nightly_veracode_scan.yml/dispatches -d  '{"ref":"master"}'
+             echo "triggered $repo"
+             done		
+  Digital_Marketing:
+    name: Digital_Marketing_veracode_script
+    runs-on: [ veracode ]
+    if: github.event.schedule == '0 12 * * WED'
+    steps:
+      - uses: actions/checkout@v2
+      - name: nightly_veracode_script_Trigger the workflow
+        run: |
+             for repo in $(cat digital_marketing.txt)
+             do
+             curl -X POST -H "Accept: application/vnd.github.v3+json" -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" https://github.albertsons.com/api/v3/repos/albertsons/$repo/actions/workflows/nightly_veracode_scan.yml/dispatches -d  '{"ref":"master"}'
+             echo "triggered $repo"
+             done
+  Pharmacy_Health_and_Wellness:
+    name: Pharmacy_Health_and_Wellness_script
+    runs-on: [ veracode ]
+    if: github.event.schedule == '0 12 * * THU'
+    steps:
+      - uses: actions/checkout@v2
+      - name: nightly_veracode_script_Trigger the workflow
+        run: |
+             for repo in $(cat pharmacy_health_and_wellness.txt)
+             do
+             curl -X POST -H "Accept: application/vnd.github.v3+json" -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" https://github.albertsons.com/api/v3/repos/albertsons/$repo/actions/workflows/nightly_veracode_scan.yml/dispatches -d  '{"ref":"master"}'
+             echo "triggered $repo"
+             done
+             
+  Digital_Customer_Experience:
+    name: Digital_Customer_Experience_nightly_veracode_script
+    runs-on: [ veracode ]
+    if: github.event.schedule == '0 12 * * FRI'
+    steps:
+      - uses: actions/checkout@v2
+      - name: nightly_veracode_script_Trigger the workflow
+        run: |
+             for repo in $(cat digitalcustomerexperience.txt)
+             do
+             curl -X POST -H "Accept: application/vnd.github.v3+json" -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" https://github.albertsons.com/api/v3/repos/albertsons/$repo/actions/workflows/nightly_veracode_scan.yml/dispatches -d  '{"ref":"master"}'
+             echo "triggered $repo"
+             done 

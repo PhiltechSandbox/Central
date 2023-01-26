@@ -1,0 +1,24 @@
+name: release_tag_cicd
+on:
+ workflow_call:
+   inputs:
+      TAG:    
+        required: true
+        type: string 
+  
+jobs:
+  creation:
+     name: Tag
+     runs-on: [ AKS ]
+     steps:
+       - uses: actions/checkout@v2
+       - uses: actions/github-script@v6
+         if: ${{ github.event.pull_request.merged }} == true
+         with:
+          script: |
+            github.rest.git.createRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: 'refs/tags/${{ inputs.TAG }}',
+              sha: context.sha
+            })

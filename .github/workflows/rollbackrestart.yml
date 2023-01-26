@@ -1,0 +1,49 @@
+name: rollback-restart
+
+on:
+ workflow_call:
+   inputs:
+      ACTIONSFILE:    
+        required: true
+        type: string
+      TAG:    
+        required: true
+        type: string 
+      rollbackrestart:
+        required: false
+        type: boolean
+        default: false
+   secrets:
+     KUBECONFIG:
+       required: true   
+
+env: 
+  ACTIONSFILE: ${{ inputs.ACTIONSFILE }}
+  TAG: ${{ inputs.TAG }}
+jobs:
+  rollbackrestart:
+    runs-on: [ AKS ]
+    steps:
+      - uses: actions/checkout@v2          
+      - name: Read application properties file
+        id: app_name
+        uses: albertsons/esgh-actions-jsonread@release
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.APP_NAME          
+      - name: Read application properties file
+        id: namespace
+        uses: albertsons/esgh-actions-jsonread@release
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.NAMESPACE         
+      - name: Set K8s-context   
+        uses: albertsons/esgh-actions-k8scontext@v1
+        with:
+          kubeconfig: ${{ secrets.KUBECONFIG }}          
+      - run: |
+          sleep 1m
+          kubectl rollout restart deployment ${{ steps.app_name.outputs.prop }}-deployment -n ${{ steps.namespace.outputs.prop }}
+ 
+
+         

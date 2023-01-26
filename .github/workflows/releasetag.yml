@@ -1,0 +1,26 @@
+name: release_tag_cicd
+on:
+ workflow_call:
+   inputs:
+      TAG:    
+        required: true
+        type: string 
+      date_stamp: 
+        required: true
+        type: string
+  
+jobs:
+  creation:
+     name: Tag
+     runs-on: [ pilot ]
+     steps:
+       - uses: actions/checkout@v2
+       - uses: actions/github-script@v6
+         with:
+          script: |
+            github.rest.git.createRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: 'refs/tags/0.1.${{ inputs.date_stamp}}-${{ inputs.TAG }}',
+              sha: context.sha
+            })

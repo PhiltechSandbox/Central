@@ -1,0 +1,94 @@
+name: oneclick-deploy-prod
+
+on:
+ workflow_call:
+   inputs:
+      ACTIONSFILE:    
+        required: true
+        type: string
+      TAG:    
+        required: true
+        type: string 
+   secrets:
+     REGISTRY_USER:
+       required: true
+     REGISTRY_PWD:
+       required: true
+     KUBECONFIG:
+       required: true    
+
+env: 
+  ACTIONSFILE: ${{ inputs.ACTIONSFILE }}
+  TAG: ${{ inputs.TAG }}
+jobs:
+  app-deploy:
+    runs-on: [ AKS ]
+    environment: production
+    steps:
+      - uses: actions/checkout@v2
+      - name: Read application properties file
+        id: appcode
+        uses: albertsons/esgh-actions-jsonread@release
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.APPCODE          
+      - name: Read application properties file
+        id: app_name
+        uses: albertsons/esgh-actions-jsonread@release
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.APP_NAME          
+      - name: Read application properties file
+        id: registry_url
+        uses: albertsons/esgh-actions-jsonread@release
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.REGISTRY_URL
+      - name: Read application properties file
+        id: namespace
+        uses: albertsons/esgh-actions-jsonread@release
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.NAMESPACE 
+      - name: Read application properties file
+        id: values_path
+        uses: albertsons/esgh-actions-jsonread@release
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.VALUES_PATH
+      - name: Read application properties file
+        id: config_path
+        uses: albertsons/esgh-actions-jsonread@release
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.CONFIG_PATH           
+      - name: Read application properties file
+        id: helm_name
+        uses: albertsons/esgh-actions-jsonread@release
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.HELM_NAME         
+      - name: Set K8s-context  
+        uses: albertsons/esgh-actions-k8scontext@v1
+        with:
+          kubeconfig: ${{ secrets.KUBECONFIG }}          
+      - name: Docker Login    
+        uses: albertsons/esgh-docker-login@v1
+        with:
+          registry: ${{ steps.registry_url.outputs.prop }}
+          username: ${{ secrets.REGISTRY_USER }}
+          password: ${{ secrets.REGISTRY_PWD }}
+      - run: |    
+          helm template --name-template=${{ steps.app_name.outputs.prop }} ${{ steps.helm_name.outputs.prop }} -f ${{ steps.values_path.outputs.prop }} --set app.namespace=${{ steps.namespace.outputs.prop }},global.image.repository=${{ steps.registry_url.outputs.prop }}/${{ steps.appcode.outputs.prop }},app.image.repository=${{ steps.registry_url.outputs.prop }}/${{ steps.appcode.outputs.prop }},app.containers.image=${{ steps.app_name.outputs.prop }}:${{ env.TAG }},configfile=${{ steps.config_path.outputs.prop }} > deploy-manifests.yaml
+          kubectl apply -f deploy-manifests.yaml
+      - name: Image tag
+        uses: actions/upload-artifact@v2
+        with:
+          name: Image - ${{ env.TAG }}
+          path: 
+            deploy-manifests.yaml
+      - name: clean workspace
+        uses: albertsons/esgh-workspace-clean@v2-bash
+      - name: Printing workspace cleaned message
+        run: |
+          echo "Workspace cleared for run ID ${{ github.run_number }}"      

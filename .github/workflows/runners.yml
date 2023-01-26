@@ -1,0 +1,16 @@
+name: retrieve runners that are idle
+on: 
+  workflow_dispatch:
+      
+
+
+
+jobs:
+  runners:
+    name: retrieve runners that are idle
+    runs-on: [ aks ]
+    steps:
+      - uses: actions/checkout@v2
+      - name: retrieve runners that are idle
+        run: |
+          python runnersinfo.py

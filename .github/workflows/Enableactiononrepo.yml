@@ -1,0 +1,24 @@
+name: Enable Actions on Repo
+on: 
+  workflow_dispatch:
+    inputs:
+      repo_name:
+        description: 'Enter_repository_name'
+        type: string
+      
+
+
+jobs:
+  enable_repo:
+    name: Repo Action
+    runs-on: [ pilot ]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Enable Github action on Repo
+        run: |
+           python enable_action_existing_repo.py ${{ github.event.inputs.repo_name }} ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+      - name: clean workspace
+        uses: albertsons/esgh-workspace-clean@v2-bash
+      - name: Printing workspace cleaned message
+        run: |
+          echo "Workspace cleared for run ID ${{ github.run_number }}"    

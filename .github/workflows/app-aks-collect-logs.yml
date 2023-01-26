@@ -1,0 +1,73 @@
+name: APP-AKS-COLLECT-LOGS
+on:
+  workflow_call:
+    inputs:
+      ACTIONSFILE:    
+        required: true
+        type: string
+      microservice:
+        type: string
+        description: 'Microservice Name'    
+        required: true 
+    secrets:
+      PERSONAL_ACCESS_TOKEN:
+        required: true
+      ESCO_AKS_NONPROD_CLUSTER:
+        required: true
+      ESCO_AKS_PROD_CLUSTER:
+        required: true
+env:
+  ACTIONSFILE: ${{ inputs.ACTIONSFILE }}
+jobs:
+  Service-log:
+    runs-on: [ AKS ]
+    steps:
+      - name: Set k8s-cluster-context
+        uses: actions/checkout@v2
+        with:
+          repository: albertsons/esgh-actions-k8scontext
+          ref: v1
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          path: ./.github/albertsons/esgh-actions-k8scontext   
+      - uses: ./.github/albertsons/esgh-actions-k8scontext
+        if: github.event.inputs.env_name != 'prod'
+        with:
+          kubeconfig: ${{ secrets.ESCO_AKS_NONPROD_CLUSTER }}
+      - uses: ./.github/albertsons/esgh-actions-k8scontext
+        if: github.event.inputs.env_name == 'prod'
+        with:
+          kubeconfig: ${{ secrets.ESCO_AKS_PROD_CLUSTER }}
+      - uses: actions/checkout@v2
+      - name: Execute Log Collection
+        run: python Scripts/dxinaz-collect-logs.py ${{ inputs.microservice }} dev
+      - uses: actions/upload-artifact@v2
+        with:
+          name: ${{ inputs.microservice }}[ Service-log ]
+          path: ./*-log.txt
+  Deployment-log:
+    runs-on: [ AKS ]
+    needs: Service-log
+    steps:
+      - uses: actions/checkout@v2
+      - name: Read application properties file
+        id: app_name
+        uses: albertsons/esgh-actions-jsonread@release
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.APP_NAME          
+      - name: Read application properties file
+        id: namespace
+        uses: albertsons/esgh-actions-jsonread@release
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.NAMESPACE
+      - name: Set K8s-context   
+        uses: albertsons/esgh-actions-k8scontext@v1
+        with:
+          kubeconfig: ${{ secrets.ESCO_AKS_NONPROD_CLUSTER }}  
+      - name: Deployment Log Collection
+        run: kubectl describe deployment ${{ steps.app_name.outputs.prop }}-deployment -n ${{ steps.namespace.outputs.prop }} > ${{ steps.app_name.outputs.prop }}-deployment.txt
+      - uses: actions/upload-artifact@v2
+        with:
+          name: ${{ inputs.microservice }}[ Deployment-log ]
+          path: ./*.txt

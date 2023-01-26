@@ -1,0 +1,156 @@
+name: canary-deploy-aks
+
+on:
+ workflow_call:
+   inputs:
+      ACTIONSFILE:    
+        required: true
+        type: string  
+      TAG:    
+        required: true
+        type: string        
+   secrets:
+     REGISTRY_USER:
+       required: true
+     REGISTRY_PWD:
+       required: true
+     PERSONAL_ACCESS_TOKEN:
+       required: true 
+     KUBECONFIG:
+       required: true 
+env: 
+  ACTIONSFILE: ${{ inputs.ACTIONSFILE }}
+  TAG: ${{ inputs.TAG }}
+  
+jobs:
+#Deploying the new image in the same production namespace, but as a separate deployment, thereby the current version
+## will be 100% live intact until and unless the newer version get successfully promoted to production after the test.
+#
+  canary-deploy:
+    runs-on: [ jenkins-sl1 ]
+    steps:
+      - uses: actions/checkout@v2
+      - name: json
+        uses: actions/checkout@v2
+        with:
+          repository: albertsons/esgh-actions-jsonread
+          ref: release
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          path: ./.github/albertsons/esgh-actions-jsonread
+      - name: Read application properties file
+        id: appcode
+        uses: ./.github/albertsons/esgh-actions-jsonread
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.APPCODE           
+      - name: Read application properties file
+        id: app_name
+        uses: ./.github/albertsons/esgh-actions-jsonread
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.APP_NAME          
+      - name: Read application properties file
+        id: registry_url
+        uses: ./.github/albertsons/esgh-actions-jsonread
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.REGISTRY_URL
+      - name: Read application properties file
+        id: namespace
+        uses: ./.github/albertsons/esgh-actions-jsonread
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.NAMESPACE         
+      - name: Read application properties file
+        id: values_path
+        uses: ./.github/albertsons/esgh-actions-jsonread
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.VALUES_PATH
+      - name: Read application properties file
+        id: config_path
+        uses: ./.github/albertsons/esgh-actions-jsonread
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.CONFIG_PATH           
+      - name: Read application properties file
+        id: helm_name
+        uses: ./.github/albertsons/esgh-actions-jsonread
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.HELM_NAME         
+      - name: Set K8s-context
+        uses: actions/checkout@v2
+        with:
+          repository: albertsons/esgh-actions-k8scontext
+          ref: v1
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          path: ./.github/albertsons/esgh-actions-k8scontext   
+      - uses: ./.github/albertsons/esgh-actions-k8scontext      
+        with:
+          kubeconfig: ${{ secrets.KUBECONFIG }}          
+      - name: Docker Login Registry
+        uses: actions/checkout@v2
+        with:
+          repository: albertsons/esgh-docker-login
+          ref: v1
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}      
+          path: ./.github/albertsons/esgh-docker-login     
+      - uses: ./.github/albertsons/esgh-docker-login
+        with:
+          registry: ${{ steps.registry_url.outputs.prop }}
+          username: ${{ secrets.REGISTRY_USER }}
+          password: ${{ secrets.REGISTRY_PWD }}
+      - run: |
+          helm template --name-template=${{ steps.ap_pname.outputs.prop }} ${{ steps.helm_name.outputs.prop }} -f ${{ steps.values_path.outputs.prop }} --set app.namespace=${{ steps.namespace.outputs.prop }} --set app.containers.image=${{ steps.appcode.outputs.prop }}/${{ steps.app_name.outputs.prop }}:${{ env.TAG }},configfile=${{ steps.config_path.outputs.prop }},strategy.extension="-canary",service.labels.deploy-strategy="canary",app.labels.deploy-strategy="canary",strategy.canary.enabled="true" > canary-manifests.yaml     
+          kubectl apply -f canary-manifests.yaml 
+          
+# Here is the space for you to integrate your testing framework (selenium, Jmeter etc). The testcase should run against the same production domain,
+# but by passing a header cookie which has the cookie name "deploy-strategy" and value "canary". The manual test can be 
+# done from the browser by adding the extension "Cookie-Editor".
+  test-case:
+    runs-on: [ pilot ]
+    needs: canary-deploy
+    steps:
+      - uses: actions/checkout@v2    
+      - name: Run testcase      
+        run: |
+            mvn clean test
+            
+#Once the testing is completed, removing the canary deployment
+  Remove-Canary-Deployment:
+    runs-on: [ jenkins-sl1 ]
+    needs: test-case
+    steps:
+      - name: Remove Canary Deployment After testcase execution     
+        uses: actions/checkout@v2                    
+      - name: json
+        uses: actions/checkout@v2
+        with:
+          repository: albertsons/esgh-actions-jsonread
+          ref: release
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          path: ./.github/albertsons/esgh-actions-jsonread
+      - name: Read application properties file
+        id: namespace
+        uses: ./.github/albertsons/esgh-actions-jsonread
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.NAMESPACE   
+      - name: Read application properties file
+        id: app_name
+        uses: ./.github/albertsons/esgh-actions-jsonread
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.APP_NAME           
+      - name: Set k8s-context
+        uses: actions/checkout@v2
+        with:
+          repository: albertsons/esgh-actions-k8scontext
+          ref: v1
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          path: ./.github/albertsons/esgh-actions-k8scontext   
+      - uses: ./.github/albertsons/esgh-actions-k8scontext
+        with:
+          kubeconfig: ${{ secrets.KUBECONFIG }}
+      - run: kubectl delete Deployment ${{ steps.app_name.outputs.prop }}-deployment-canary --insecure-skip-tls-verify --namespace ${{ steps.namespace.outputs.prop }}

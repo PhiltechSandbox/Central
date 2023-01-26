@@ -1,0 +1,54 @@
+name: oneclick-ci-sonaranalysis-nonprod
+
+on:
+ workflow_call:
+   inputs:
+      ACTIONSFILE:    
+        required: true
+        type: string
+      TAG:    
+        required: true
+        type: string 
+      javaVersion:
+        required: true
+        type: number
+      branch_name: 
+         required: true
+         type: string
+   secrets:  
+     SONAR_TOKEN:
+       required: true
+     SONAR_HOST_URL:
+       required: true
+     SONAR_CONTINUEONERROR_NONPROD:
+       required: false
+       
+env: 
+  ACTIONSFILE: ${{ inputs.ACTIONSFILE }}
+  TAG: ${{ inputs.TAG }}
+jobs:          
+  Sonarqube_Analysis:
+    runs-on: [ aks ]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up JDK 11
+        uses: actions/setup-java@v2
+        with:
+          java-version: '11'
+          overwrite-settings: false
+          distribution: 'adopt'
+          #cache: maven
+      - name: Download Artifact.
+        uses: actions/download-artifact@v2
+        with:
+          name: AppArtifacts   
+      - name: Build and Sonar analyze
+        continue-on-error: ${{ secrets.SONAR_CONTINUEONERROR_NONPROD == 'true' }}
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}  
+        run: |
+          export GIT_COMMIT=`git rev-parse --short HEAD`
+          echo ${GIT_COMMIT}
+          mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent install org.jacoco:jacoco-maven-plugin:report  --settings settings.xml
+          mvn sonar:sonar -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} -Dsonar.login=${{ secrets.SONAR_TOKEN }}  --settings settings.xml 

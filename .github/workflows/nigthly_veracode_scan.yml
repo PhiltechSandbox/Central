@@ -1,0 +1,97 @@
+name: Veracode_Scan_jar 
+on:
+  workflow_call:
+   inputs:
+      VERACODE_APPNAME:
+       required: true  
+       type: string
+      javaVersion:
+        required: true
+        type: number 
+      build_type:
+        required: true
+        type: string
+      FILEPATH:
+        required: true
+        type: string
+   secrets:  
+     VERACODEID:
+       required: true  
+     VERACODEKEY:
+       required: true 
+jobs:
+  Maven_Build:
+    runs-on: [ veracode ]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up JDK '${{ inputs.javaVersion }}'
+        uses: actions/setup-java@v2
+        with:
+          java-version: '${{ inputs.javaVersion }}'
+          distribution: 'adopt'
+          #cache: maven
+      - name: Build with Maven 
+        run: |
+          echo ${{ env.TAG }}
+          if [[ ${{ inputs.build_type }} == 'maven' ]]
+          then
+          cp /home/es00gh/.m2/settings.xml .
+          #chmod +x mvnw
+          ls -l 
+          mvn clean install --settings settings.xml
+          fi
+      - name: Build with Maven Wrapper
+        run: |
+          if [[ ${{ inputs.build_type }} == 'mavenwrapper' ]]
+          then
+          cp /home/es00gh/.m2/settings.xml .
+          chmod +x mvnw
+          ls -l 
+          ./mvnw clean install --settings settings.xml
+          fi
+      - name: Upload Artifacts      
+        uses: actions/upload-artifact@v2
+        with:
+          name: AppArtifacts
+          path: |
+            **/target/*.jar
+            settings.xml
+      - name: clean workspace
+        uses: albertsons/esgh-workspace-clean@v2-bash
+      - name: Printing workspace cleaned message
+        run: |
+          echo "Workspace cleared for run ID ${{ github.run_number }}"      
+            
+  Veracode_scan:
+    runs-on: [ veracode ]
+    needs: Maven_Build
+    steps:
+      - uses: actions/checkout@v2    
+      - name: Download Artifact.
+        uses: actions/download-artifact@v2
+        with:
+          name: AppArtifacts           
+      - name: veracode scan
+        continue-on-error: true
+        uses: albertsons/esgh-actions-veracode@master
+        with:
+          filepath: '${{ inputs.FILEPATH }}'
+          vid: '${{ secrets.VERACODEID }}'
+          vkey: '${{ secrets.VERACODEKEY }}'
+          appname: '${{ inputs.VERACODE_APPNAME }}'
+          createsandbox: ''
+          sandboxname: ''
+          scantimeout: 15
+          exclude: '**/maven-wrapper.jar'
+          include: '**/**.jar, **/**.war, **/**.ear'
+          criticality: 'VeryHigh'
+          AbortOnFail: 'true'  
+          deleteIncompleteScan: 2
+          scanallnonfataltoplevelmodules: 'true'
+          createprofile: 'false'
+          debug: 'true'
+      - name: clean workspace
+        uses: albertsons/esgh-workspace-clean@v2-bash
+      - name: Printing workspace cleaned message
+        run: |
+          echo "Workspace cleared for run ID ${{ github.run_number }}"    

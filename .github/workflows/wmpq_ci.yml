@@ -1,0 +1,295 @@
+name: wmpq_ci
+
+on:
+ workflow_call:
+   inputs:
+      ACTIONSFILE:    
+        required: true
+        type: string
+      TAG:    
+        required: true
+        type: string     
+   secrets:
+     SONAR_TOKEN:
+       required: true
+     SONAR_HOST_URL:
+       required: true
+     TL_USERNAME:
+       required: true
+     TL_PASSWORD:
+       required: true
+     REGISTRY_USER:
+       required: true
+     REGISTRY_PWD:
+       required: true
+     PERSONAL_ACCESS_TOKEN:
+       required: true 
+     KUBECONFIG:
+       required: true  
+     VERACODEID:
+       required: true  
+     VERACODEKEY:
+       required: true
+     SONAR_CONTINUEONERROR_PROD:
+       required: false
+     VERACODE_CONTINUEONERROR_PROD:
+       required: false
+
+env: 
+  ACTIONSFILE: ${{ inputs.ACTIONSFILE }}
+  TAG: ${{ inputs.TAG }}
+jobs:
+  BranchName:
+    runs-on: [ pilot ]
+    steps:
+      - uses: actions/checkout@v2
+      - name: To read branch name from ref
+        id: vars
+        run: echo ::set-output name=short_ref::${GITHUB_REF#refs/*/}
+      - name: Branch on which this action workflow run is happening
+        run: echo ${{ steps.vars.outputs.short_ref }}
+        
+  Maven_Build:
+    runs-on: [ pilot ]
+    needs: BranchName
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up JDK 11
+        uses: actions/setup-java@v2
+        with:
+          java-version: 11
+          overwrite-settings: false
+          distribution: 'adopt'
+          #cache: maven
+      - name: Build with Maven Wrapper
+        run: |
+          cp /home/es00gh/.m2/settings.xml .
+          chmod +x mvnw
+          ls -l 
+          ./mvnw clean install --settings settings.xml
+      - uses: actions/upload-artifact@v2
+        with:
+          name: AppArtifacts
+          path: |
+            ./target/*.jar 
+            settings.xml
+          
+  Sonarqube_Analysis:
+    runs-on: [ pilot ]
+    needs: Maven_Build
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up JDK 11
+        uses: actions/setup-java@v2
+        with:
+          java-version: '11'
+          overwrite-settings: false
+          distribution: 'adopt'
+          #cache: maven
+      - name: Download Artifact.
+        uses: actions/download-artifact@v2
+        with:
+          name: AppArtifacts   
+      - name: Build and Sonar analyze
+        continue-on-error: ${{ secrets.SONAR_CONTINUEONERROR_PROD == 'true' }}
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}  
+        run: |
+          export GIT_COMMIT=`git rev-parse --short HEAD`
+          echo ${GIT_COMMIT}
+          mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent install org.jacoco:jacoco-maven-plugin:report  --settings settings.xml
+          mvn sonar:sonar -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} -Dsonar.login=${{ secrets.SONAR_TOKEN }}  --settings settings.xml 
+  
+  Veracode_scan:
+    runs-on: [ jenkins-sl1 ]
+    needs: Sonarqube_Analysis
+    steps:
+      - uses: actions/checkout@v2    
+      - name: Download Artifact.
+        uses: actions/download-artifact@v2
+        with:
+          name: AppArtifacts           
+      - name: veracode scan
+        continue-on-error: ${{ secrets.VERACODE_CONTINUEONERROR_PROD == 'true' }}
+        run: echo "Veracode skip for demo, to save approx 30 minutes"       
+  Junit_test_and_report:
+    runs-on: [ jenkins-sl1 ]
+    needs: Veracode_scan
+    steps:
+     - uses: actions/checkout@v2
+     - name: Run tests with Maven
+       run: mvn -B test --file pom.xml
+       #run: mvn clean test   
+     - name: Download Artifact.
+       uses: actions/download-artifact@v2
+       with:
+         name: AppArtifacts           
+     - name: Publish Unit Test Results 
+       uses: albertsons/esgh-actions-publish-unit-test-result@v1    
+       if: always()
+       with:
+         files: "target/surefire-reports/*.xml"  
+  Selenium_Automation:
+    runs-on: [ windows ]
+    needs: [Junit_test_and_report]
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up JDK 11
+        uses: actions/setup-java@v2
+        with:
+          java-version: 11
+          overwrite-settings: false
+          distribution: 'adopt'
+          #cache: maven
+      - name: Run automation
+        run: |
+          echo "C:\Program Files\Apache\bin" >> $GITHUB_PATH
+          ls
+          cd wmpq-automation
+          ls
+          SET CLASSPATH=%CLASSPATH%;"C:\jenkins_prod\maven35-agent.jar";"C:\jenkins_prod\tools\hudson.tasks.Maven_MavenInstallation\Maven-3.6\boot\plexus-classworlds-2.6.0.jar";"C:\jenkins_prod\tools\hudson.tasks.Maven_MavenInstallation\Maven-3.6/conf/logging";"jenkins.maven3.agent.Maven35Main";"C:\jenkins_prod\tools\hudson.tasks.Maven_MavenInstallation\Maven-3.6";"C:\jenkins_prod\slave.jar";"C:\jenkins_prod\maven35-interceptor.jar";"C:\jenkins_prod\maven3-interceptor-commons.jar" 
+          echo "$CLASSPATH"
+          echo "$PATH"
+          #java -jar C:\selenium-hub-node-configs\DRIVERS\selenium-server-standalone-3.11.0.jar -role hub -hubConfig C:\selenium-hub-node-configs\HUB\hubConfig.json
+          #sleep 10
+          java -jar C:\selenium-hub-node-configs\DRIVERS\selenium-server-standalone-3.11.0.jar -role hub -hubConfig C:\selenium-hub-node-configs\HUB\hubConfig.json
+          java -Dwebdriver.chrome.driver="C:\selenium-hub-node-configs\DRIVERS\chromedriver.exe" -jar C:\selenium-hub-node-configs\DRIVERS\selenium-server-standalone-3.11.0.jar -role node -nodeConfig GridNode.json
+          cmd.exe /C "C:\jenkins_prod\tools\hudson.tasks.Maven_MavenInstallation\Maven-3.6\bin\mvn.cmd -f pom.xml clean install -Dsurefire.suiteXmlFiles=src\test\resources\testExecutionDriver\testEnvExecutionSuites\TestSuite_QA_SanityTest.xml"
+          cmd.exe /C "C:\jenkins_prod\tools\hudson.tasks.Maven_MavenInstallation\Maven-3.6\bin\mvn.cmd -f pom.xml clean install -Dsurefire.suiteXmlFiles=src\test\resources\testExecutionDriver\testEnvExecutionSuites\TestSuite_QA_RegressionMenus.xml"
+          cmd.exe /C "C:\jenkins_prod\tools\hudson.tasks.Maven_MavenInstallation\Maven-3.6\bin\mvn.cmd -f pom.xml clean install -Dsurefire.suiteXmlFiles=src\test\resources\testExecutionDriver\testEnvExecutionSuites\TestSuite_QA_RegressionEndtoEnd.xml"
+
+  Docker_build:
+    runs-on: [ jenkins-sl1 ]
+    needs: [Selenium_Automation]
+    steps:
+      - uses: actions/checkout@v2    
+      - name: Download Artifact Jarfile.
+        uses: actions/download-artifact@v2
+        with:
+          name: AppArtifacts 
+      - name: Read application properties file
+        id: appcode
+        uses: albertsons/esgh-actions-jsonread@release
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.APPCODE           
+      - name: Read application properties file
+        id: app_name
+        uses: albertsons/esgh-actions-jsonread@release
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.APP_NAME
+      - name: Read application properties file
+        id: registry_url
+        uses: albertsons/esgh-actions-jsonread@release
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.REGISTRY_URL                
+      - name: Docker Build     
+        uses: albertsons/esgh-docker-login@v1
+        with:
+          registry: ${{ steps.registry_url.outputs.prop }}
+          username: ${{ secrets.REGISTRY_USER }}
+          password: ${{ secrets.REGISTRY_PWD }}          
+      - run: |
+          docker build --tag ${{ steps.registry_url.outputs.prop }}/${{ steps.appcode.outputs.prop }}/${{ steps.app_name.outputs.prop }}:${{ env.TAG }} .
+  Twistlock_And_Docker_Push:
+    runs-on: [ jenkins-sl1 ]
+    needs: Docker_build
+    steps:
+      - uses: actions/checkout@v2    
+      - name: Read application properties file
+        id: appcode
+        uses: albertsons/esgh-actions-jsonread@release
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.APPCODE
+      - name: Read application properties file
+        id: app_name
+        uses: albertsons/esgh-actions-jsonread@release
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.APP_NAME
+      - name: Read application properties file
+        id: registry_url
+        uses: albertsons/esgh-actions-jsonread@release
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.REGISTRY_URL 
+      - uses: albertsons/esgh-actions-twistlock@v1
+        with:
+          tl-username: ${{ secrets.TL_USERNAME }}
+          tl-password: ${{ secrets.TL_PASSWORD }}
+          tl-console-url: https://us-east1.cloud.twistlock.com/us-2-158288594
+          docker-image: ${{ steps.registry_url.outputs.prop }}/${{ steps.appcode.outputs.prop }}/${{ steps.app_name.outputs.prop }}:${{ env.TAG }}          
+      - name: Docker login and Push Image to registry
+        uses: albertsons/esgh-docker-login@v1
+        with:
+          registry: ${{ steps.registry_url.outputs.prop }}
+          username: ${{ secrets.REGISTRY_USER }}
+          password: ${{ secrets.REGISTRY_PWD }} 
+      - run: |
+          docker push ${{ steps.registry_url.outputs.prop }}/${{ steps.appcode.outputs.prop }}/${{ steps.app_name.outputs.prop }}:${{ env.TAG }}
+
+  dev-deploy:
+    needs: Twistlock_And_Docker_Push
+    runs-on: [ jenkins-sl1 ]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Read application properties file
+        id: appcode
+        uses: albertsons/esgh-actions-jsonread@release
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.APPCODE          
+      - name: Read application properties file
+        id: app_name
+        uses: albertsons/esgh-actions-jsonread@release
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.APP_NAME          
+      - name: Read application properties file
+        id: registry_url
+        uses: albertsons/esgh-actions-jsonread@release
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.REGISTRY_URL
+      - name: Read application properties file
+        id: namespace
+        uses: albertsons/esgh-actions-jsonread@release
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.NAMESPACE 
+      - name: Read application properties file
+        id: values_path
+        uses: albertsons/esgh-actions-jsonread@release
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.VALUES_PATH
+      - name: Read application properties file
+        id: config_path
+        uses: albertsons/esgh-actions-jsonread@release
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.CONFIG_PATH           
+      - name: Read application properties file
+        id: helm_name
+        uses: albertsons/esgh-actions-jsonread@release
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.HELM_NAME         
+      - name: Set K8s-context   
+        uses: albertsons/esgh-actions-k8scontext@v1
+        with:
+          kubeconfig: ${{ secrets.KUBECONFIG }}          
+      - name: Docker Login    
+        uses: albertsons/esgh-docker-login@v1
+        with:
+          registry: ${{ steps.registry_url.outputs.prop }}
+          username: ${{ secrets.REGISTRY_USER }}
+          password: ${{ secrets.REGISTRY_PWD }}
+      - run: |
+          helm template --name-template=${{ steps.app_name.outputs.prop }} ${{ steps.helm_name.outputs.prop }} -f ${{ steps.values_path.outputs.prop }} --set app.namespace=${{ steps.namespace.outputs.prop }} --set app.containers.image=${{ steps.appcode.outputs.prop }}/${{ steps.app_name.outputs.prop }}:${{ env.TAG }},configfile=${{ steps.config_path.outputs.prop }},strategy.extension="",strategy.canary.enabled="false" > deploy-manifests.yaml     
+          kubectl apply -f deploy-manifests.yaml

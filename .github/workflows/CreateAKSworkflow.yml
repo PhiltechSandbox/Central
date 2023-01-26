@@ -1,0 +1,79 @@
+name: Enable AKS workflow on Repo
+on: 
+  workflow_dispatch:
+    inputs:
+      repo_name:
+        description: 'Enter_repository_name'
+        type: string
+      template:
+        description: 'Build Type'
+        type: string
+        default: test
+      
+
+
+
+jobs:
+  enable_repo:
+    name: Repo Action
+    runs-on: [ aks ]
+    steps:
+      - uses: actions/checkout@v2
+      - name: extract_date
+        id: date
+        run: echo "::set-output name=date::$(date +'%Y%m%d')"
+      - name: Enable Github action on Repo
+        run: |
+          # python enable_action_existing_repo.py ${{ github.event.inputs.repo_name }} ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+           git clone https://${{ secrets.PERSONAL_ACCESS_TOKEN }}@github.albertsons.com/albertsons/${{ github.event.inputs.repo_name }}.git
+           cd ${{ github.event.inputs.repo_name }}
+           UUID=$(uuidgen |  cut -d '-' -f 1)
+           git checkout -b github-actions-${{ steps.date.outputs.date }}-$UUID
+           mkdir -p .github/workflows/
+           mkdir -p Actionsfile
+           if [[ ${{ github.event.inputs.template }} == maven ]]
+           then
+           cp ../.github/workflows/workflowtemplateprovisioning/mavenbuild/oneclick-cicd-nonprod.yml .github/workflows/
+           cp ../.github/workflows/workflowtemplateprovisioning/mavenbuild/oneclick-ci-prod.yml .github/workflows/
+           cp ../.github/workflows/workflowtemplateprovisioning/mavenbuild/deploy-nonprod.yml .github/workflows/
+           cp ../.github/workflows/workflowtemplateprovisioning/mavenbuild/deploy-prod.yml .github/workflows/
+           elif [[ ${{ github.event.inputs.template }} == mavenwrapper ]]
+           then
+           cp ../.github/workflows/workflowtemplateprovisioning/mavenwrapperbuild/oneclick-cicd-nonprod.yml .github/workflows/
+           cp ../.github/workflows/workflowtemplateprovisioning/mavenwrapperbuild/oneclick-ci-prod.yml .github/workflows/
+           cp ../.github/workflows/workflowtemplateprovisioning/mavenwrapperbuild/deploy-nonprod.yml .github/workflows/
+           cp ../.github/workflows/workflowtemplateprovisioning/mavenwrapperbuild/deploy-prod.yml .github/workflows/
+           elif [[ ${{ github.event.inputs.template }} == node ]]
+           then
+           cp ../.github/workflows/workflowtemplateprovisioning/nodebuild/oneclick-cicd-nonprod.yml .github/workflows/
+           cp ../.github/workflows/workflowtemplateprovisioning/nodebuild/oneclick-ci-prod.yml .github/workflows/
+           cp ../.github/workflows/workflowtemplateprovisioning/nodebuild/deploy-nonprod.yml .github/workflows/
+           cp ../.github/workflows/workflowtemplateprovisioning/nodebuild/deploy-prod.yml .github/workflows/
+           elif [[ ${{ github.event.inputs.template }} == dotnet ]]
+           then
+           cp ../.github/workflows/workflowtemplateprovisioning/dotnetbuild/oneclick-cicd-nonprod.yml .github/workflows/
+           cp ../.github/workflows/workflowtemplateprovisioning/dotnetbuild/oneclick-ci-prod.yml .github/workflows/
+           cp ../.github/workflows/workflowtemplateprovisioning/dotnetbuild/deploy-nonprod.yml .github/workflows/
+           cp ../.github/workflows/workflowtemplateprovisioning/dotnetbuild/deploy-prod.yml .github/workflows/
+           elif [[ ${{ github.event.inputs.template }} == gradle ]]
+           then
+           cp ../.github/workflows/workflowtemplateprovisioning/gradlebuild/oneclick-cicd-nonprod.yml .github/workflows/
+           cp ../.github/workflows/workflowtemplateprovisioning/gradlebuild/oneclick-ci-prod.yml .github/workflows/
+           cp ../.github/workflows/workflowtemplateprovisioning/gradlebuild/deploy-nonprod.yml .github/workflows/
+           cp ../.github/workflows/workflowtemplateprovisioning/gradlebuild/deploy-prod.yml .github/workflows/
+           else
+           echo "not a proper template"
+           fi
+
+           if [[ ${{ github.event.inputs.template }} != test ]]
+           then
+           git add .
+           git commit -m "gitops"
+           git push origin github-actions-${{ steps.date.outputs.date }}-$UUID
+           fi
+      - name: clean workspace
+        uses: albertsons/esgh-workspace-clean@v2-bash
+      - name: Printing workspace cleaned message
+        run: |
+          echo "Workspace cleared for run ID ${{ github.run_number }}"       
+  

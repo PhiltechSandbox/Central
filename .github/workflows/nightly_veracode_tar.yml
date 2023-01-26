@@ -1,0 +1,74 @@
+name: Veracode_Scan_tar
+on:
+  workflow_call:
+   inputs:
+      VERACODE_APPNAME:
+       required: true  
+       type: string
+      NODE_VERSION:
+       required: false  
+       type: string 
+       default: '14' 
+
+   secrets:  
+     VERACODEID:
+       required: true  
+     VERACODEKEY:
+       required: true 
+
+jobs:
+  npm_Build:
+    runs-on: [ AKS ]
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '${{ inputs.NODE_VERSION }}'
+      - name: Build with npm 
+        run: | 
+         npm install
+         tar -czvf node_modules.tar.gz node_modules
+      - uses: actions/upload-artifact@v2
+        with:
+          name: AppArtifacts
+          path: |
+            **/*.tar.gz
+      - name: clean workspace
+        uses: albertsons/esgh-workspace-clean@v2-bash
+      - name: Printing workspace cleaned message
+        run: |
+          echo "Workspace cleared for run ID ${{ github.run_number }}"       
+            
+  Veracode_scan:
+    runs-on: [ AKS  ]
+    needs: npm_Build
+    steps:
+      - uses: actions/checkout@v2    
+      - name: Download Artifact.
+        uses: actions/download-artifact@v2
+        with:
+          name: AppArtifacts           
+      - name: veracode scan
+        continue-on-error: true
+        uses: albertsons/esgh-actions-veracode@master
+        with:
+          filepath: './*.tar.gz'
+          vid: '${{ secrets.VERACODEID }}'
+          vkey: '${{ secrets.VERACODEKEY }}'
+          appname: '${{ inputs.VERACODE_APPNAME }}'
+          createsandbox: ''
+          sandboxname: ''
+          scantimeout: 15
+          exclude: '**/maven-wrapper.jar'
+          include: '*.tar.gz'
+          criticality: 'VeryHigh'
+          AbortOnFail: 'true'  
+          deleteIncompleteScan: 2
+          scanallnonfataltoplevelmodules: 'true'
+          createprofile: 'false'
+          debug: 'true'
+      - name: clean workspace
+        uses: albertsons/esgh-workspace-clean@v2-bash
+      - name: Printing workspace cleaned message
+        run: |
+          echo "Workspace cleared for run ID ${{ github.run_number }}"    

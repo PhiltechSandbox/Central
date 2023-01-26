@@ -1,0 +1,105 @@
+name: deploy_np_test
+
+on:
+ workflow_call:
+   inputs:
+      ACTIONSFILE:    
+        required: true
+        type: string
+      TAG:    
+        required: true
+        type: string
+   
+   secrets:
+     REGISTRY_USER:
+       required: true
+     REGISTRY_PWD:
+       required: true
+     KUBECONFIG:
+       required: true  
+
+env: 
+  ACTIONSFILE: ${{ inputs.ACTIONSFILE }}
+  TAG: ${{ inputs.TAG }}
+  
+jobs:
+  
+  dev-deploy:
+    runs-on: [ jenkins-sl1 ]
+    environment: non-prod-test
+    steps:
+      - uses: actions/checkout@v2
+      - name: json
+        uses: actions/checkout@v2
+        with:
+          repository: albertsons/esgh-actions-jsonread
+          ref: release
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          path: ./.github/albertsons/esgh-actions-jsonread
+      - name: Read application properties file
+        id: appcode
+        uses: ./.github/albertsons/esgh-actions-jsonread
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.APPCODE          
+      - name: Read application properties file
+        id: app_name
+        uses: ./.github/albertsons/esgh-actions-jsonread
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.APP_NAME          
+      - name: Read application properties file
+        id: registry_url
+        uses: ./.github/albertsons/esgh-actions-jsonread
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.REGISTRY_URL
+      - name: Read application properties file
+        id: namespace
+        uses: ./.github/albertsons/esgh-actions-jsonread
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.NAMESPACE 
+      - name: Read application properties file
+        id: values_path
+        uses: ./.github/albertsons/esgh-actions-jsonread
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.VALUES_PATH
+      - name: Read application properties file
+        id: config_path
+        uses: ./.github/albertsons/esgh-actions-jsonread
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.CONFIG_PATH           
+      - name: Read application properties file
+        id: helm_name
+        uses: ./.github/albertsons/esgh-actions-jsonread
+        with:
+           path: ${{ env.ACTIONSFILE }}
+           prop_path: application_properties.HELM_NAME         
+      - name: Set K8s-context
+        uses: actions/checkout@v2
+        with:
+          repository: albertsons/esgh-actions-k8scontext
+          ref: v1
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          path: ./.github/albertsons/esgh-actions-k8scontext   
+      - uses: ./.github/albertsons/esgh-actions-k8scontext
+        with:
+          kubeconfig: ${{ secrets.KUBECONFIG }}          
+      - name: Docker Login
+        uses: actions/checkout@v2
+        with:
+          repository: albertsons/esgh-docker-login
+          ref: v1
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}      
+          path: ./.github/albertsons/esgh-docker-login     
+      - uses: ./.github/albertsons/esgh-docker-login
+        with:
+          registry: ${{ steps.registry_url.outputs.prop }}
+          username: ${{ secrets.REGISTRY_USER }}
+          password: ${{ secrets.REGISTRY_PWD }}
+      - run: |
+          helm template --name-template=${{ steps.app_name.outputs.prop }} ${{ steps.helm_name.outputs.prop }} -f ${{ steps.values_path.outputs.prop }} --set app.namespace=${{ steps.namespace.outputs.prop }} --set app.containers.image=${{ steps.appcode.outputs.prop }}/${{ steps.app_name.outputs.prop }}:${{ env.TAG }},configfile=${{ steps.config_path.outputs.prop }},strategy.extension="",strategy.canary.enabled="false" > deploy-manifests.yaml     
+          kubectl apply -f deploy-manifests.yaml --validate=false

@@ -1,0 +1,37 @@
+name: Close the CR
+on: 
+ workflow_call:
+   secrets:
+     SERVICENOW_TOKEN:
+       required: true
+     PERSONAL_ACCESS_TOKEN:
+       required: true 
+jobs:
+  create:
+    name: close cr
+    runs-on: [ pilot ]
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/checkout@v2
+        with:
+          repository: albertsons/esgh-run-python-script
+          ref: v1
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          path: ./.github/albertsons/esgh-run-python-script  
+      - uses: ./.github/albertsons/esgh-run-python-script
+        with:
+          script: |
+            import requests
+            import json
+            import sys
+            auth_token = 'TmV0Y29vbC5JbnRlZ3JhdGlvbjpTZXJ2aWNlTm93MjAyMSE='
+            hed = {'Authorization': 'Basic ' + auth_token}
+            with open("Actionsfile/prod", "r") as payload:
+                 data = json.load(payload)
+                 close = data["closechange"]
+            print(data)
+            url = 'https://safewaydev1.service-now.com/api/now/table/u_change_request_staging'
+            response = requests.post(url, json=close, headers=hed)
+            print(response)
+            print(response.json())
+            #repo_id = response.json()

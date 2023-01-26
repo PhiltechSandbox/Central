@@ -1,0 +1,12 @@
+name: ls runner
+
+on:
+ workflow_dispatch: 
+
+jobs:
+  ls:
+    runs-on: [ linux-2 ]
+    steps:
+     - run: |
+         #ls -la /esgh/actions-runner-02/_work/ppapl-rest-sprboot-azr/ppapl-rest-sprboot-azr/target/
+         ls -la /esgh/actions-runner-02/_work/ospg-recon/ospg-recon/target/
